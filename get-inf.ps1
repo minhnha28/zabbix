@@ -30,15 +30,46 @@ if ($latitude_and_longitude.Permission -eq 'Denied') {
     $latitude = $latitude_and_longitude.Position.Location.Latitude
     $longitude = $latitude_and_longitude.Position.Location.Longitude
 
-    $api_key = "AAPKea62091723b24fb09b6a7385d28395f2EiPVPUvO8LiMfF714GZ9JG0b_dVH_xnGgpJSN-uBHAYXj2YreOFUPkl2wemDhu7X"
-    $url = "https://geocode-api.arcgis.com/arcgis/rest/services/World/GeocodeServer/reverseGeocode?location=$longitude,$latitude&featureTypes=StreetInt&f=json&token=$api_key"
-    $response = Invoke-RestMethod -Uri $url
+    $headers = @{
+        "X-RapidAPI-Key" = "abf409b819mshc2e12d6b68f54f9p19d04ajsne5f8a164db12"
+        "X-RapidAPI-Host" = "google-maps-api-free.p.rapidapi.com"
+    }
 
-    $match_addr = $response.address.Match_addr
-    $match_addr_no_diacritics = RemoveVietnameseDiacritics($match_addr)
-    $match_addr_no_diacritics_unique = $match_addr_no_diacritics | Select-Object -Unique
+    $maxRetries = 3
+    $retryCount = 0
+    $success = $false
 
-    $ipWAN = $wanIP
+    while (-not $success -and $retryCount -lt $maxRetries) {
+        try {
+            # Gửi yêu cầu API để lấy thông tin geocode
+            $response = Invoke-WebRequest -Uri "https://google-maps-api-free.p.rapidapi.com/google-geocode?lat=$latitude&long=$longitude" -Method GET -Headers $headers
+            # Chuyển đổi nội dung phản hồi thành JSON object
+            $jsonResponse = $response.Content | ConvertFrom-Json
 
-    Write-Host "$ipWAN|$match_addr_no_diacritics_unique"
+            # Lấy giá trị của trường formatted_address
+            $formattedAddress = $jsonResponse.results[0].formatted_address
+
+            $match_addr_no_diacritics = RemoveVietnameseDiacritics($formattedAddress)
+            $match_addr_no_diacritics_unique = $match_addr_no_diacritics | Select-Object -Unique
+
+            $ipWAN = $wanIP
+
+            Write-Host "$ipWAN|$match_addr_no_diacritics_unique"
+            $success = $true
+        } catch {
+            # Bắt lỗi và hiển thị thông tin chi tiết
+            #Write-Host "An error occurred: $($_.Exception.Message)"
+            if ($_.Exception.Message -eq "The remote server returned an error: (502) Bad Gateway.") {
+                $retryCount++
+                #Write-Host "Retrying... ($retryCount/$maxRetries)"
+                Start-Sleep -Seconds 3
+            } else {
+                break
+            }
+        }
+    }
+
+    if (-not $success) {
+        Write-Host "Failed to retrieve geocode information after $maxRetries attempts."
+    }
 }
