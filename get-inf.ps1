@@ -35,7 +35,7 @@ if ($latitude_and_longitude.Permission -eq 'Denied') {
         "X-RapidAPI-Host" = "google-maps-api-free.p.rapidapi.com"
     }
 
-    $maxRetries = 3
+    $maxRetries = 10
     $retryCount = 0
     $success = $false
 
@@ -70,6 +70,6 @@ if ($latitude_and_longitude.Permission -eq 'Denied') {
     }
 
     if (-not $success) {
-        Write-Host "Failed to retrieve geocode information after $maxRetries attempts."
+        #Write-Host "Failed to retrieve geocode information after $maxRetries attempts."
     }
 }
