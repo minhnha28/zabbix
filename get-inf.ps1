@@ -25,7 +25,7 @@ while (($latitude_and_longitude.Status -ne 'Ready') -and ($latitude_and_longitud
 }
 
 if ($latitude_and_longitude.Permission -eq 'Denied') {
-    Write-Error 'Access Denied for Location Information'
+    #Write-Error 'no perminssion'
 } else {
     $latitude = $latitude_and_longitude.Position.Location.Latitude
     $longitude = $latitude_and_longitude.Position.Location.Longitude
@@ -35,41 +35,35 @@ if ($latitude_and_longitude.Permission -eq 'Denied') {
         "X-RapidAPI-Host" = "google-maps-api-free.p.rapidapi.com"
     }
 
-    $maxRetries = 10
-    $retryCount = 0
     $success = $false
+    $location = ""
+    $errors = @()
 
-    while (-not $success -and $retryCount -lt $maxRetries) {
+    for ($retryCount = 1; $retryCount -le 3; $retryCount++) {
         try {
-            # Gửi yêu cầu API để lấy thông tin geocode
-            $response = Invoke-WebRequest -Uri "https://google-maps-api-free.p.rapidapi.com/google-geocode?lat=$latitude&long=$longitude" -Method GET -Headers $headers
-            # Chuyển đổi nội dung phản hồi thành JSON object
-            $jsonResponse = $response.Content | ConvertFrom-Json
-
-            # Lấy giá trị của trường formatted_address
-            $formattedAddress = $jsonResponse.results[0].formatted_address
+            $response = Invoke-RestMethod -Uri "https://google-maps-api-free.p.rapidapi.com/google-geocode?lat=$latitude&long=$longitude" -Method GET -Headers $headers
+            $formattedAddress = $response.results[4].formatted_address
 
             $match_addr_no_diacritics = RemoveVietnameseDiacritics($formattedAddress)
             $match_addr_no_diacritics_unique = $match_addr_no_diacritics | Select-Object -Unique
 
-            $ipWAN = $wanIP
-
-            Write-Host "$ipWAN|$match_addr_no_diacritics_unique"
+            $location = "$wanIP|$match_addr_no_diacritics_unique"
             $success = $true
+            break
         } catch {
-            # Bắt lỗi và hiển thị thông tin chi tiết
-            #Write-Host "An error occurred: $($_.Exception.Message)"
+            $errors += $_.Exception.Message
             if ($_.Exception.Message -eq "The remote server returned an error: (502) Bad Gateway.") {
-                $retryCount++
-                #Write-Host "Retrying... ($retryCount/$maxRetries)"
-                Start-Sleep -Seconds 3
+                Start-Sleep -Seconds 1
             } else {
                 break
             }
         }
     }
 
-    if (-not $success) {
-        #Write-Host "Failed to retrieve geocode information after $maxRetries attempts."
+    if ($success) {
+        Write-Host $location
+    } else {
+        #Write-Host "khong the lay sau 3 lan:"
+        #$errors | ForEach-Object { Write-Host $_ }
     }
 }
